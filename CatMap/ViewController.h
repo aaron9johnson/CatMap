@@ -7,9 +7,10 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "SearchViewController.h"
 
-@interface ViewController : UIViewController
-
-
+@interface ViewController : UIViewController <UICollectionViewDataSource,UICollectionViewDelegate,Photos>
+@property (strong, nonatomic) NSMutableArray *photos;
+@property CLLocationCoordinate2D coordinate;
 @end
 

@@ -1,43 +1,72 @@
 //
-//  ViewController.m
+//  SearchViewController.m
 //  CatMap
 //
 //  Created by Aaron Johnson on 2017-10-24.
 //  Copyright © 2017 Aaron Johnson. All rights reserved.
 //
 
-#import "ViewController.h"
-#import "MyCollectionViewCell.h"
-#import "Photo.h"
-#import <MapKit/MapKit.h>
-#import "DetailViewController.h"
 #import "SearchViewController.h"
+#import "Photo.h"
 
-@interface ViewController ()
-@property (weak, nonatomic) IBOutlet UICollectionView *myCollectionView;
-
+@interface SearchViewController ()
+@property (weak, nonatomic) IBOutlet UITextField *postalCode;
+@property NSMutableArray *photos;
 @end
 
-@implementation ViewController
-- (IBAction)showAll:(UIBarButtonItem *)sender {
-    [self performSegueWithIdentifier:@"mySegue" sender:@"ALL"];
-}
-- (IBAction)search:(UIBarButtonItem *)sender {
-    [self performSegueWithIdentifier:@"searchSegue" sender:nil];
-}
+@implementation SearchViewController
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     _photos = [NSMutableArray new];
-    [self catsFromFlicker];
+    // Do any additional setup after loading the view.
 }
--(void)viewDidAppear:(BOOL)animated{
-    [self.myCollectionView reloadData];
+-(void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations {
+    NSLog(@"Latitude = %f",[locations.lastObject coordinate].latitude );
+    NSLog(@"Longitude =%f",[locations.lastObject coordinate].longitude);
+    self.coordinate = [locations.lastObject coordinate];
+    [self.myLocationManager stopUpdatingLocation];
+    [self imagesFromFlicker:self.myTextField.text];
 }
--(void)catsFromFlicker{
+-(void)locationManager:(CLLocationManager *)manager didFailWithError: (NSError *)error {
+    NSLog(@"didFailWithError: %@", error);
+}
+- (IBAction)myButton:(UIButton *)sender {
+    if(self.mySwitch.on){
+        [self.myLocationManager requestLocation];
+    } else {
+        CLGeocoder *geoCoder = [[CLGeocoder alloc] init];
+        [geoCoder geocodeAddressString:self.postalCode.text completionHandler:^(NSArray *placemarks, NSError *error) {
+            CLPlacemark *placemark = [placemarks objectAtIndex:0];
+            self.coordinate = placemark.location.coordinate;
+            [self imagesFromFlicker:self.myTextField.text];
+        }];
+    }
+    
+}
+-(CLLocationManager *)myLocationManager{
+    if(_myLocationManager == nil){
+        self.myLocationManager = [[CLLocationManager alloc] init];
+        self.myLocationManager.delegate = self;
+        //[self.myLocationManger requestWhenInUseAuthorization];
+        self.myLocationManager.desiredAccuracy = kCLLocationAccuracyBest;
+        [self.myLocationManager startUpdatingLocation];
+        
+        //self.myLocationManger.distanceFilter = 500;
+    }
+    return _myLocationManager;
+}
+-(void)imagesFromFlicker:(NSString *)search{
+    //https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=b9e8e163b77044fdadc7c1e29f8286c8&tags=cat&has_geo=1&format=json&nojsoncallback=1&extras=url_m&accuracy=11&lat=&lon=
+    
+    
+//    https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=b9e8e163b77044fdadc7c1e29f8286c8&tags=cat&has_geo=1&format=json&nojsoncallback=1&extras=url_m&accuracy=11&lat=49.281840&lon=-123.108430
+    
+    
     //https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=b9e8e163b77044fdadc7c1e29f8286c8&tags=cat&has_geo=1&extras=url_m&format=json&nojsoncallback=1
     
     //https://api.flickr.com/services/rest/?method=flickr.photos.geo.getLocation&api_key=b9e8e163b77044fdadc7c1e29f8286c8&photo_id={photo id}&format=json&nojsoncallback=1
-    NSURL *url = [NSURL URLWithString:@"https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=b9e8e163b77044fdadc7c1e29f8286c8&tags=cat&has_geo=1&extras=url_m&format=json&nojsoncallback=1"];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=b9e8e163b77044fdadc7c1e29f8286c8&tags=%@&has_geo=1&format=json&nojsoncallback=1&extras=url_m&accuracy=11&lat=%f&lon=%f", search,self.coordinate.latitude,self.coordinate.longitude]];
     NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
     urlRequest.HTTPMethod = @"GET";
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -77,7 +106,7 @@
                                                   
                                                   // Tell the main queue, to do somthing
                                                   dispatch_async(dispatch_get_main_queue(), ^{
-                                                      [self.myCollectionView reloadData];
+                                                      [self done];
                                                   });
                                               }
                                           }
@@ -88,40 +117,10 @@
     
     NSLog(@"view did load");
 }
-- (nonnull __kindof UICollectionViewCell *)collectionView:(nonnull UICollectionView *)collectionView cellForItemAtIndexPath:(nonnull NSIndexPath *)indexPath {
-    MyCollectionViewCell * cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"myCell" forIndexPath:indexPath];
-    
-    Photo *temp = self.photos[indexPath.item];
-    cell.myImageView.image = temp.image;
-    cell.myLabel.text = temp.title;
-    
-    return cell;
+-(void)done{
+    [self.delegate setPhotos:self.photos];
+    [self.delegate setCoordinate:self.coordinate];
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
-
-- (NSInteger)collectionView:(nonnull UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
-    return self.photos.count;
-}
-- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath{
-    [self performSegueWithIdentifier:@"mySegue" sender:indexPath];
-}
--(void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender{
-    if([segue.identifier isEqualToString:@"mySegue"]){
-        DetailViewController *dVC = [segue destinationViewController];
-        if([sender isKindOfClass:[NSString class]]){
-            dVC.photos = self.photos;
-        } else {
-            NSIndexPath *indexPath = sender;
-            dVC.photo = self.photos[indexPath.row];
-        }
-        dVC.me = self;
-        
-    }
-    if([segue.identifier isEqualToString:@"searchSegue"]){
-        SearchViewController *sVC = [segue destinationViewController];
-        sVC.delegate = self;
-    }
-    
-}
-
 
 @end
